@@ -22,6 +22,8 @@
 (function() {
     'use strict';
 
+    console.log("TESTING GREASEMONKEY UPDATE: 1");
+
     let youtubeApiKey = '';
 
     // Function to fetch player embed code from YouTube API
