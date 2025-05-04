@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         List Of Albums - Player Injection
 // @namespace    http://tampermonkey.net/
-// @version      1.1
+// @version      1.2
 // @description  try to take over the world!
 // @author       You
 // @match        https://en.wikipedia.org/wiki/*
@@ -24,7 +24,7 @@
 (function() {
     'use strict';
 
-    console.log("TESTING GREASEMONKEY UPDATE: 3");
+    console.log("TESTING GREASEMONKEY UPDATE: 4");
 
     let youtubeApiKey = '';
 
