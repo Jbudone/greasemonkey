@@ -7,8 +7,8 @@
 // @match        https://en.wikipedia.org/wiki/*
 // @icon         https://www.google.com/s2/favicons?sz=64&domain=wikipedia.org
 // @grant        GM_xmlhttpRequest
-// @updateURL    https://raw.githubusercontent.com/Jbudone/greasemonkey/refs/heads/main/wikialbums.js
-// @downloadURL  https://raw.githubusercontent.com/Jbudone/greasemonkey/refs/heads/main/wikialbums.js
+// @updateURL    https://raw.githubusercontent.com/Jbudone/greasemonkey/refs/heads/main/wikialbums.user.js
+// @downloadURL  https://raw.githubusercontent.com/Jbudone/greasemonkey/refs/heads/main/wikialbums.user.js
 // ==/UserScript==
 
 // TODO:
