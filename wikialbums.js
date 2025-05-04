@@ -1,12 +1,13 @@
 // ==UserScript==
 // @name         List Of Albums - Player Injection
 // @namespace    http://tampermonkey.net/
-// @version      1.0
+// @version      1.1
 // @description  try to take over the world!
 // @author       You
 // @match        https://en.wikipedia.org/wiki/*
 // @icon         https://www.google.com/s2/favicons?sz=64&domain=wikipedia.org
 // @grant        GM_xmlhttpRequest
+// @updateURL    https://raw.githubusercontent.com/Jbudone/greasemonkey/refs/heads/main/wikialbums.js
 // ==/UserScript==
 
 // TODO:
@@ -22,7 +23,7 @@
 (function() {
     'use strict';
 
-    console.log("TESTING GREASEMONKEY UPDATE: 1");
+    console.log("TESTING GREASEMONKEY UPDATE: 2");
 
     let youtubeApiKey = '';
 
