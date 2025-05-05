@@ -270,8 +270,8 @@
 
     async function initialLoad() {
       
-        youtubeApiKey = await (await fetch(`https://nodewebsocket.glitchy.me/bws?key=youtube-apikey`)).text();
-      	console.log(youtubeApiKey)
+        youtubeApiKey = await (await fetch(`https://nodewebsocket.glitchy.me/vaultSecret?key=youtube-apikey`)).text();
+      	console.log(youtubeApiKey);
 
         addStyles();
         addButtonsToTables();
