@@ -24,7 +24,7 @@
 (function() {
     'use strict';
 
-    console.log("TESTING GREASEMONKEY UPDATE: 5");
+    console.log("TESTING GREASEMONKEY UPDATE: 6");
 
     let youtubeApiKey = '';
 
@@ -270,7 +270,8 @@
 
     async function initialLoad() {
       
-        youtubeApiKey = await (await fetch(`https://nodewebsocket.glitchy.me/vaultSecret?key=youtube-apikey`)).text();
+        const youtubeApiKeyResponse = await (await fetch(`https://nodewebsocket.glitchy.me/vaultSecret?key=youtube-apikey`)).text();
+        youtubeApiKey = JSON.parse(youtubeApiKeyResponse).secret;
       	console.log(youtubeApiKey);
 
         addStyles();
