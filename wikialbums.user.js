@@ -1,7 +1,6 @@
 // ==UserScript==
 // @name         List Of Albums - Player Injection
-// @namespace    http://tampermonkey.net/
-// @version      1.4
+// @version      1.5
 // @description  try to take over the world!
 // @author       You
 // @match        https://en.wikipedia.org/wiki/*
@@ -12,10 +11,10 @@
 
 // TODO:
 //
-//   - Wiki/Music move iframe to static div (top of screen)
-//   - save progress (text in static div)
 //   - popular songs loaded into static div
-//   - button to go to next artist
+//   - button to go to next artist ; maybe on the side of youtube video, and on hover extend the width. Other buttons for swapping to popular songs of current album, or next album's popular song, etc.
+//   - cleanup [Play Album] and [Close Album] button
+//   - get view count for each song in the album on open: show which are most popular
 //
 
 
@@ -23,9 +22,20 @@
 (function() {
     'use strict';
 
-    console.log("TESTING GREASEMONKEY UPDATE: 7");
+    console.log("TESTING GREASEMONKEY UPDATE: 8");
 
     let youtubeApiKey = '';
+
+    let wikiPageYear = 0;
+    let savedHistory = {};
+
+    let YT = null;
+    let YTPlayerEvents = null;
+    let initialized = false;
+
+    let activePlayer = {
+
+    };
 
     // Function to fetch player embed code from YouTube API
     async function fetchFromYoutube(artist, album) {
@@ -66,14 +76,16 @@
     }
 
     async function scrapeSingles(link) {
-        return new Promise((resolve, reject) => {
-            GM_xmlhttpRequest({
-                method: "GET",
-                url: link.href,
-                onload: function(response) {
+        //return new Promise((resolve, reject) => {
+        let getResponse = await fetch(link.href);
+        let response = await getResponse.text();
+            //GM_xmlhttpRequest({
+            //    method: "GET",
+            //    url: link.href,
+            //    onload: function(response) {
                     try {
                         const parser = new DOMParser();
-                        const doc = parser.parseFromString(response.responseText, "text/html");
+                        const doc = parser.parseFromString(response, "text/html");
                         const infobox = doc.querySelector('.infobox');
                         if (infobox) {
                             const singlesRow = Array.from(infobox.querySelectorAll('tr'))
@@ -81,22 +93,22 @@
                             if (singlesRow) {
                                 // Extract and process the list of singles
                                 const singles = singlesRow.nextElementSibling.textContent; // Or other logic as needed
-                                resolve(singles);
+                                return singles;
                             } else {
-                                resolve(null);
+                                return null;
                             }
                         } else {
-                            resolve(null);
+                            return null;
                         }
                     } catch (error) {
-                        reject(error);
+                        return null;
                     }
-                },
-                onerror: function(error) {
-                    reject(error);
-                }
-            });
-        });
+            //    },
+            //    onerror: function(error) {
+            //        reject(error);
+            //    }
+            //});
+        //});
     }
 
     // Main function to fetch player
@@ -119,6 +131,10 @@
         return globalOffset;
     }
 
+    function hasViewedAlbum(artist, album) {
+        return savedHistory && savedHistory[artist] && savedHistory[artist][album];
+    }
+
     function createButton(artistCell, albumCell, artist, album) {
         const button = document.createElement('button');
         button.textContent = 'Play Album';
@@ -129,9 +145,28 @@
         button.style.display = 'none'; // Initially hidden
 
         const onClick = async function() {
-            // Extract artist and album from the row, then fetch and inject player
-            console.log('Button.onclick');
-            if (button.dataset.isPlayerActive == "true") {
+
+            if (!initialized) {
+                console.log("Not initialized yet -- ignoring button click");
+                return;
+            }
+
+            if (activePlayer.button == button) {
+                // This is the player. Closing
+                activePlayer.close();
+                return;
+            } else if (activePlayer.button) {
+                // There's already a player running. Close that one first
+                activePlayer.close();
+            }
+
+            // Open new player
+            activePlayer.button = button;
+            activePlayer.close = async function() {
+
+                activePlayer.button = null;
+                activePlayer.close = null;
+
                 // already playing, close
                 console.log("Closing player");
                 //const playerDiv = artistCell.querySelector('.player-container');
@@ -146,52 +181,64 @@
                 if (singlesDiv) {
                     albumCell.removeChild(singlesDiv);
                 }
-                this.textContent = 'Play Album';
-                this.dataset.isPlayerActive = 'false';
-            } else {
-                console.log("Opening player");
-                const artist = this.dataset.artist;
-                const album = this.dataset.album;
-                const playerCode = await fetchPlayer(artist, album);
-                if (playerCode) {
-                    const playerDiv = document.createElement('div');
-                    playerDiv.innerHTML = playerCode;
-                    playerDiv.classList.add('player-container');
-                    //artistCell.appendChild(playerDiv);
-                    document.body.prepend(playerDiv);
-                    this.textContent = 'Close Player';
-                    this.dataset.isPlayerActive = 'true';
+                button.textContent = 'Play Album';
+                button.dataset.isPlayerActive = 'false';
 
-                    let albumLink = albumCell.querySelector('a');
-                    if (albumLink) {
-                        let singles = await scrapeSingles(albumLink);
-                        const singlesDiv = document.createElement('div');
-                        singlesDiv.innerHTML = singles;
-                        singlesDiv.classList.add('singles-container');
-                        albumCell.appendChild(singlesDiv);
-                    }
+                // Save history
+                const artist = button.dataset.artist, artistComponent = encodeURIComponent(artist);
+                const album = button.dataset.album, albumComponent = encodeURIComponent(album);
+                if (!savedHistory[artist]) savedHistory[artist] = {};
+                savedHistory[artist][album] = true;
+                const th = button.parentElement.parentElement;
+                th.classList.add('viewed-album');
+                th.classList.remove('viewing-album');
 
-                    var player = new YT.Player('yt-iframe', {
-                        events: {
-                            'onReady': onPlayerReady,
-                            'onStateChange': onPlayerStateChange
-                        }
-                    });
+                const savedHistoryResponse  = await (await fetch(`https://nodewebsocket.glitchy.me/dbAction?proj=wikialbums&action=addHistory&year=${wikiPageYear}&artist=${artistComponent}&album=${albumComponent}`)).text();
+                //let = await fetch(`https://nodewebsocket.glitchy.me/dbAction?proj=wikialbums&action=addHistory&year=${wikiPageYear}&artist=${artistComponent}&album=${albumComponent}`);
+                //let response = await savedHistoryResponse.text();
+                console.log(savedHistoryResponse);
+            };
 
-                    function onPlayerReady(event) {
-                        unsafeWindow['player'] = player;
-                    }
-                    function onPlayerStateChange(event) {
-                    }
+
+
+
+            // Extract artist and album from the row, then fetch and inject player
+            activePlayer.button = button;
+            console.log("Opening player");
+            const artist = this.dataset.artist;
+            const album = this.dataset.album;
+            const playerCode = await fetchPlayer(artist, album);
+            if (playerCode) {
+                const playerDiv = document.createElement('div');
+                const th = button.parentElement.parentElement;
+                th.classList.add('viewing-album');
+                playerDiv.innerHTML = playerCode;
+                playerDiv.classList.add('player-container');
+                //artistCell.appendChild(playerDiv);
+                document.body.prepend(playerDiv);
+                button.textContent = 'Close Player';
+                button.dataset.isPlayerActive = 'true';
+
+                let albumLink = albumCell.querySelector('a');
+                if (albumLink) {
+                    let singles = await scrapeSingles(albumLink);
+                    const singlesDiv = document.createElement('div');
+                    singlesDiv.innerHTML = singles;
+                    singlesDiv.classList.add('singles-container');
+                    albumCell.appendChild(singlesDiv);
                 }
+
+                // NOTE: YT belongs to a separate realm than userscript; so these events need to be specified in our injected script
+                var player = new YT.Player('yt-iframe', YTPlayerEvents);
             }
 
+
             // NOTE: Injection/Dejection can cause window to scroll out of view
-            setTimeout(() => {
-                const buttonParentEl = button.parentElement; // NOTE: button is sometimes hidden, so we can't read its offset nor offsetParent easily
-                const buttonOffset = getGlobalOffset(buttonParentEl);
-                window.scroll(0, buttonOffset);
-            }, 100);
+            //setTimeout(() => {
+            //    const buttonParentEl = button.parentElement; // NOTE: button is sometimes hidden, so we can't read its offset nor offsetParent easily
+            //    const buttonOffset = getGlobalOffset(buttonParentEl);
+            //    window.scroll(0, buttonOffset);
+            //}, 100);
         };
 
         button.addEventListener('click', onClick, true);
@@ -205,13 +252,33 @@
         var style = `
             .player-container {
                 position: fixed;
-                bottom: 0px;
                 z-index: 100;
                 width: 100%;
-                height: 100px;
+                height: 20%;
+                top: 0px;
+            }
+
+            .player-container:hover {
+                height: 80%;
+            }
+
+            #yt-iframe {
+                height: 100%;
+            }
+
+            .viewed-album {
+                color: green;
+                font-weight: bold;
+                background-color: bisque;
+            }
+
+            .viewing-album {
+                font-weight: bold;
+                background-color: green;
             }
         `;
         styleEl.innerText = style;
+        document.head.appendChild(styleEl);
     }
 
     function addButtonsToTables() {
@@ -239,25 +306,57 @@
                 // Show button on hover
                 artistCell.onmouseenter = () => button.style.display = '';
                 artistCell.onmouseleave = () => button.style.display = 'none';
+
+                // Have we already viewed this?
+                let viewedAlbum = hasViewedAlbum(artist, album);
+                if (viewedAlbum) {
+                    row.classList.add('viewed-album');
+                }
             }
         });
 
 
+        //var player;
+        // function defined in here belongs to its own "realm"
+        // have to define this function in a script that belongs in the same realm as the YT script
+        const YTOnReadyScriptEl = document.createElement('script');
+        YTOnReadyScriptEl.id = 'YT-on-ready-script';
+        YTOnReadyScriptEl.textContent = `
+            function onYouTubeIframeAPIReady() {
+                console.log("ONYOUTUBELOAD");
+                //player = new YT.Player('yt-iframe', {
+                //    events: {
+                //        'onReady': onPlayerReady,
+                //        'onStateChange': onPlayerStateChange
+                //    }
+                //});
+            }
+
+            function onPlayerReady(event) {
+            }
+
+            function onPlayerStateChange(event) {
+            }
+
+            window['onPlayerReady'] = onPlayerReady;
+            window['onPlayerStateChange'] = onPlayerStateChange;
+
+            window['YTPlayerEvents'] = {
+                events: {
+                    'onReady': onPlayerReady,
+                    'onStateChange': onPlayerStateChange
+                }
+            };
+        `;
+        document.head.appendChild(YTOnReadyScriptEl);
+        //var firstScriptTag = document.getElementsByTagName('script')[0];
+        //firstScriptTag.parentNode.insertBefore(YTOnReadyScriptEl, firstScriptTag);
+
         var tag = document.createElement('script');
         tag.id = 'yt-iframe-api';
         tag.src = 'https://www.youtube.com/iframe_api';
-        var firstScriptTag = document.getElementsByTagName('script')[0];
-        firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
-
-        //var player;
-        function onYouTubeIframeAPIReady() {
-            //player = new YT.Player('yt-iframe', {
-            //    events: {
-            //        'onReady': onPlayerReady,
-            //        'onStateChange': onPlayerStateChange
-            //    }
-            //});
-        }
+        document.head.appendChild(tag);
+        //YTOnReadyScriptEl.parentNode.insertBefore(tag, YTOnReadyScriptEl);
 
         //function onPlayerReady(event) {
         //    debugger;
@@ -265,13 +364,50 @@
         //}
         //function onPlayerStateChange(event) {
         //}
+        //
+
+        let onDependenciesReady = () => {
+            console.log('Dependencies ready');
+            initialized = true;
+            YT = unsafeWindow['YT'];
+            YTPlayerEvents = unsafeWindow['YTPlayerEvents'];
+        };
+
+        let waitUntilDependenciesReady = () => {
+            if (unsafeWindow['YT']) {
+                onDependenciesReady();
+                return;
+            }
+
+            setTimeout(waitUntilDependenciesReady, 100);
+        };
+
+        waitUntilDependenciesReady();
     }
 
     async function initialLoad() {
       
+        // fetch api key
         const youtubeApiKeyResponse = await (await fetch(`https://nodewebsocket.glitchy.me/vaultSecret?key=youtube-apikey`)).text();
         youtubeApiKey = JSON.parse(youtubeApiKeyResponse).secret;
       	console.log(youtubeApiKey);
+
+        const yearPart = window.location.pathname.match(/List_of_(\d+)_albums/);
+        wikiPageYear = (yearPart && yearPart.length == 2) ? yearPart[1] : 0;
+
+        // fetch saved history
+        const savedHistoryResponse = await (await fetch(`https://nodewebsocket.glitchy.me/dbAction?proj=wikialbums&action=history&year=${wikiPageYear}`)).text();
+        console.log(savedHistoryResponse);
+        let savedHistoryRaw = JSON.parse(savedHistoryResponse);
+        console.log(savedHistoryRaw);
+
+        savedHistory = {}; // { artist[] {album} }
+        for (let i = 0; i < savedHistoryRaw.length; ++i) {
+            const artist = decodeURIComponent(savedHistoryRaw[i].artist);
+            const album = decodeURIComponent(savedHistoryRaw[i].album);
+            if (!savedHistory[artist]) { savedHistory[artist] = {}; }
+            savedHistory[artist][album] = true;
+        }
 
         addStyles();
         addButtonsToTables();
